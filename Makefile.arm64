@@ -1,0 +1,72 @@
+# Standalone build for sc68 2.2.1 on Apple Silicon (arm64) macOS.
+#
+# Bypasses the 2003-era autoconf/libtool, which does not recognise arm64
+# (config.guess reports "arm-apple-darwin", and ltmain.sh is libtool 1.4.3).
+#
+#   make -f Makefile.arm64            build build/sc68 and build/info68
+#   make -f Makefile.arm64 install    install binaries + data under PREFIX
+#   make -f Makefile.arm64 clean
+#
+# build/sc68play plays straight out of the speakers via CoreAudio.
+# build/sc68 emits headerless PCM on stdout, as upstream does.
+
+PREFIX      ?= /usr/local
+ARCH        ?= arm64
+DATADIR      = $(PREFIX)/share/sc68
+BUILD        = build
+
+CC          ?= cc
+CFLAGS      ?= -O2 -fno-strict-aliasing
+CFLAGS      += -arch $(ARCH) -I. \
+               -DHAVE_CONFIG_H=1 -DHAVE_CONFIG_CONFIG68_H=1 \
+               -DNO_FALLBACK_CONFIG=1 \
+               -DSC68_SHARED_DATA_PATH='"$(DATADIR)"' \
+               -Wall -Wno-multichar -Wno-pointer-sign
+LDFLAGS     += -arch $(ARCH)
+LDLIBS      += -lz
+
+# -fno-strict-aliasing matters: the 68k core and the YM/Paula emulation
+# type-pun through the emulated memory buffer.
+
+SRCS = \
+  $(wildcard emu68/*.c) \
+  $(wildcard io68/*.c) \
+  $(wildcard file68/*.c) \
+  $(wildcard unice68/*.c) \
+  api68/api68.c api68/conf68.c api68/mixer68.c
+
+OBJS = $(addprefix $(BUILD)/,$(SRCS:.c=.o))
+
+all: $(BUILD)/sc68 $(BUILD)/info68 $(BUILD)/sc68play
+
+$(BUILD)/libsc68.a: $(OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+
+$(BUILD)/sc68: sc68/sc68.c $(BUILD)/libsc68.a
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD)/info68: info68/info68.c $(BUILD)/libsc68.a
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD)/sc68play: macos/sc68play.c $(BUILD)/libsc68.a
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS) \
+	  -framework AudioToolbox -framework CoreFoundation
+
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+install: all
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 755 $(BUILD)/sc68 $(BUILD)/info68 $(BUILD)/sc68play \
+	  $(DESTDIR)$(PREFIX)/bin
+	install -d $(DESTDIR)$(DATADIR)/Replay $(DESTDIR)$(DATADIR)/Sample
+	install -m 644 data/Replay/*.bin $(DESTDIR)$(DATADIR)/Replay
+	install -m 644 data/Sample/*.sc68 $(DESTDIR)$(DATADIR)/Sample
+	install -m 644 data/config.txt $(DESTDIR)$(DATADIR)
+
+clean:
+	rm -rf $(BUILD)
+
+.PHONY: all install clean

@@ -1,0 +1,19 @@
+#!/bin/sh
+# sc68play - convenience wrapper: run the CoreAudio player from the source tree
+# without installing, pointing SC68_DATA at the bundled replay routines.
+#
+#   ./sc68play data/Sample/About-Intro.sc68
+#   ./sc68play --track=3 mytune.sndh
+#
+# After "make -f Makefile.arm64 install" you can just run sc68play directly.
+
+here=$(cd -- "$(dirname -- "$0")" && pwd)
+
+: "${SC68_DATA:=$here/data}"
+: "${SC68_HOME:=$HOME/.sc68}"
+export SC68_DATA SC68_HOME
+
+# sc68 writes its config here on first run and fails if the directory is absent.
+[ -d "$SC68_HOME" ] || mkdir -p "$SC68_HOME"
+
+exec "$here/build/sc68play" "$@"

@@ -1,0 +1,10 @@
+# Build output (make -f Makefile.arm64)
+/build/
+*.o
+*.a
+
+# Local music collection - copyrighted, keep out of the repo
+/sndh_files/
+
+# macOS
+.DS_Store
